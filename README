@@ -1,3 +1,9 @@
+NAME: yum-plugin-replace
+
+CREATOR/MAINTAINER: BJ Dierkes <wdierkes@5dollarwhitebox.org>
+
+DESCRIPTION:
+
 This plugin enables the ability to replace an installed package, with another
 package that provides the same thing.  It was developed specifically for the
 IUS Community Project whose packages have alternative names as to not
@@ -25,3 +31,10 @@ halt and ask for user approval to continue.  Then end user can optionally
 pass '-y' to assume yes to this inquiry.  It should be noted that it is 
 quite common that a newer 'replacement' package would not fully provide
 everything that the original package did. 
+
+
+LICENSE
+
+This plugin is Open Source and released under the GNU GPLv2.  Please see
+the LICENSE file that came with this source.
+
