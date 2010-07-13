@@ -1,0 +1,169 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+#
+# by BJ Dierkes <wdierkes@rackspace.com> 
+
+#-----------------------------------------------------------------------------
+
+import re
+import sys
+import logging
+from yum.plugins import TYPE_CORE
+from yum.Errors import UpdateError, RemoveError
+from yum.constants import PLUG_OPT_STRING, PLUG_OPT_WHERE_ALL
+
+requires_api_version = '2.6'
+plugin_type = (TYPE_CORE,)
+
+def config_hook(conduit):
+    "Add options to Yums configuration."
+    parser = conduit.getOptParser()
+    parser.add_option('--replace-with', dest='replace_with', action='store',
+        metavar='BASEPKG', help="name of the base package to replace with")
+
+    reg = conduit.registerCommand
+    reg(ReplaceCommand(['replace']))
+
+class ReplaceCommand(object):
+    def __init__(self, names): 
+        self.names = names
+
+    def getNames(self):
+        return self.names 
+
+    def getUsage(self):
+        return "[PACKAGE]"
+    
+    def getSummary(self):
+        return """\
+Replace a package with another that provides the same thing"""
+
+    def doCheck(self, base, basecmd, extcmds):
+        pass
+
+    def doCommand(self, base, basecmd, extcmds):
+        logger = logging.getLogger("yum.verbose.main")
+        print "Replacing packages takes time, please be patient..."
+        pkgs_to_remove = []
+        pkgs_to_install = []
+        deps_to_resolve = []
+        pkgs_to_reinstall = []
+        pkgs_with_same_srpm = []
+
+        def msg(x):
+            logger.log(logginglevels.INFO_2, x)
+        def msg_warn(x):
+            logger.warn(x)
+
+
+        opts = base.plugins.cmdline[0]
+        if len(base.plugins.cmdline[1]) <= 1:
+            raise UpdateError, "Must specify a package to be replaced (i.e yum replace pkg --replace-with pkgXY)"
+        if not opts.replace_with:
+            raise UpdateError, "Replacement package name required (--replace-with)" 
+
+        orig_pkg = base.plugins.cmdline[1][1]
+        new_pkg = opts.replace_with
+
+        if not base.isPackageInstalled(orig_pkg):
+            raise RemoveError, "Package '%s' is not installed." % orig_pkg
+
+        # get pkg object
+        res = base.rpmdb.searchNevra(name=orig_pkg)
+        if len(res) > 1:
+            raise RemoveError, \
+                "Multiple packages found matching '%s'.  Please remove manually." % \
+                orig_pkg
+        orig_pkgobject = res[0]
+        pkgs_to_remove.append(orig_pkgobject)
+
+        # find all other installed packages with same srpm (orig_pkg's subpackages)
+        for pkg in base.rpmdb:
+            if pkg.sourcerpm == orig_pkgobject.sourcerpm and pkg not in pkgs_to_remove:
+                pkgs_to_remove.append(pkg)
+                for dep in pkg.provides_names:
+                    deps_to_resolve.append(dep)
+
+        # get new pkg object
+        res = base.pkgSack.returnNewestByName(new_pkg)
+        if len(res) > 1:
+            raise UpdateError, \
+                "Multiple packages found matching '%s'.  Please upgrade manually." % \
+                new_pkg
+        new_pkgobject = res[0]
+        pkgs_to_install.append(new_pkgobject)
+
+        # re-install pkgs that rely on orig_pkg
+        for pkg in base.rpmdb:
+            for req in pkg.requires_names:
+                if req in deps_to_resolve:
+                    if pkg not in pkgs_to_reinstall and pkg not in pkgs_to_remove:
+                        pkgs_to_reinstall.append(pkg)
+
+        # determine all new_pkg subpackages that provide missing deps
+        for pkg in base.pkgSack:
+            if pkg.sourcerpm == new_pkgobject.sourcerpm:
+                pkgs_with_same_srpm.append(pkg)
+                for dep in pkg.provides_names:
+                    if dep in deps_to_resolve:
+                        if pkg not in pkgs_to_remove:
+                            pkgs_to_install.append(pkg)
+                        deps_to_resolve.remove(dep)
+
+        # This is messy: determine if any of the pkgs_to_reinstall have
+        # counterparts as part of same 'base name' set (but different srpm, i.e. 
+        # php and php-pear has different source rpms but you want phpXY-pear too).
+        for pkg in pkgs_to_reinstall:
+            m = re.match('%s-(.*)' % orig_pkg, pkg.name)
+            if not m:
+                continue
+            replace_name = "%s-%s" % (new_pkg, m.group(1))
+            for pkg2 in base.pkgSack: 
+                if pkg2.name == replace_name:
+                    if pkg not in pkgs_to_remove:
+                        pkgs_to_remove.append(pkg)
+                    if pkg2 not in pkgs_to_install:
+                        pkgs_to_install.append(pkg2)
+
+        # clean up duplicates (multiple versions)
+        _pkgs_to_install = []
+        for pkg in pkgs_to_install:
+            latest_pkg = base.pkgSack.returnNewestByName(pkg.name)[0]
+            if latest_pkg not in _pkgs_to_install:
+                _pkgs_to_install.append(latest_pkg)
+        pkgs_to_install = _pkgs_to_install
+
+
+        # Its common that newer/replacement packages won't provide all the same things.
+        # Give the user the chance to bail if they are scared.
+        if len(deps_to_resolve) > 0:
+            print
+            print "WARNING: Unable to resolve all providers: %s" % deps_to_resolve
+            print
+            if not opts.assumeyes:
+                res = raw_input("This may be normal depending on the package.  Continue? [y/N] ")
+                if not res.strip('\n').lower() in ['y', 'yes']:
+                    sys.exit(1)
+            
+        
+
+        # remove old packages
+        for pkg in pkgs_to_remove:
+            base.remove(pkg)
+        # install new/replacement packages
+        for pkg in pkgs_to_install:
+            base.install(pkg) 
+
+        return 2, ["Run transaction to replace '%s' with '%s'" % (orig_pkg, new_pkg)]
+
