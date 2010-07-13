@@ -33,6 +33,15 @@ quite common that a newer 'replacement' package would not fully provide
 everything that the original package did. 
 
 
+CODE/BUGS/ETC
+
+The source code for yum-plugin-replace is currently hosted on GitHub:
+
+    http://github.com/derks/yum-plugin-replace
+
+All bugs/feature requests can be reported there.
+
+
 LICENSE
 
 This plugin is Open Source and released under the GNU GPLv2.  Please see
