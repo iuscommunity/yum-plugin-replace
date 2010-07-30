@@ -19,12 +19,17 @@
 import re
 import sys
 import logging
+import platform
+
 from yum.plugins import TYPE_CORE
 from yum.Errors import UpdateError, RemoveError
 from yum.constants import PLUG_OPT_STRING, PLUG_OPT_WHERE_ALL
 
 requires_api_version = '2.6'
 plugin_type = (TYPE_CORE,)
+
+global pkgs_to_not_remove
+pkgs_to_not_remove = []
 
 def config_hook(conduit):
     "Add options to Yums configuration."
@@ -34,6 +39,18 @@ def config_hook(conduit):
 
     reg = conduit.registerCommand
     reg(ReplaceCommand(['replace']))
+
+def postresolve_hook(conduit):
+    """
+    Remove any un-necessary package erasures.  I.e. perl-DBD-MySQL when 
+    the 'mysql' packages gets removed before the mysql5x package gets 
+    installed.
+    """
+    global pkgs_to_not_remove
+    TsInfo = conduit.getTsInfo()
+    for i in TsInfo:
+        if i.po in pkgs_to_not_remove:
+            TsInfo.remove(i.pkgtup) 
 
 class ReplaceCommand(object):
     def __init__(self, names): 
@@ -55,10 +72,10 @@ Replace a package with another that provides the same thing"""
     def doCommand(self, base, basecmd, extcmds):
         logger = logging.getLogger("yum.verbose.main")
         print "Replacing packages takes time, please be patient..."
+        global pkgs_to_not_remove
         pkgs_to_remove = []
         pkgs_to_install = []
         deps_to_resolve = []
-        pkgs_to_reinstall = []
         pkgs_with_same_srpm = []
 
         def msg(x):
@@ -90,26 +107,35 @@ Replace a package with another that provides the same thing"""
 
         # find all other installed packages with same srpm (orig_pkg's subpackages)
         for pkg in base.rpmdb:
-            if pkg.sourcerpm == orig_pkgobject.sourcerpm and pkg not in pkgs_to_remove:
+            if pkg.sourcerpm == orig_pkgobject.sourcerpm:
                 pkgs_to_remove.append(pkg)
                 for dep in pkg.provides_names:
                     deps_to_resolve.append(dep)
 
         # get new pkg object
         res = base.pkgSack.returnNewestByName(new_pkg)
-        if len(res) > 1:
+        new_pkgs = []
+        for i in res:
+            if platform.machine() == i.arch:
+                new_pkgs.append(i)
+
+        # if no archs matched (maybe a i686 / i386 issue) then pass them all
+        if len(new_pkgs) == 0:
+            new_pkgs = res
+
+        if len(new_pkgs) > 1:
             raise UpdateError, \
                 "Multiple packages found matching '%s'.  Please upgrade manually." % \
                 new_pkg
-        new_pkgobject = res[0]
+        new_pkgobject = new_pkgs[0]
         pkgs_to_install.append(new_pkgobject)
 
-        # re-install pkgs that rely on orig_pkg
+        # don't remove pkgs that rely on orig_pkg (yum tries to remove them)
         for pkg in base.rpmdb:
             for req in pkg.requires_names:
                 if req in deps_to_resolve:
-                    if pkg not in pkgs_to_reinstall and pkg not in pkgs_to_remove:
-                        pkgs_to_reinstall.append(pkg)
+                    if pkg not in pkgs_to_not_remove and pkg not in pkgs_to_remove:
+                        pkgs_to_not_remove.append(pkg)
 
         # determine all new_pkg subpackages that provide missing deps
         for pkg in base.pkgSack:
@@ -121,10 +147,10 @@ Replace a package with another that provides the same thing"""
                             pkgs_to_install.append(pkg)
                         deps_to_resolve.remove(dep)
 
-        # This is messy: determine if any of the pkgs_to_reinstall have
+        # This is messy: determine if any of the pkgs_to_not_remove have
         # counterparts as part of same 'base name' set (but different srpm, i.e. 
         # php and php-pear has different source rpms but you want phpXY-pear too).
-        for pkg in pkgs_to_reinstall:
+        for pkg in pkgs_to_not_remove:
             m = re.match('%s-(.*)' % orig_pkg, pkg.name)
             if not m:
                 continue
@@ -133,8 +159,12 @@ Replace a package with another that provides the same thing"""
                 if pkg2.name == replace_name:
                     if pkg not in pkgs_to_remove:
                         pkgs_to_remove.append(pkg)
+                        if pkg in pkgs_to_not_remove:
+                            pkgs_to_not_remove.remove(pkg)
                     if pkg2 not in pkgs_to_install:
                         pkgs_to_install.append(pkg2)
+                        if pkg2 in pkgs_to_not_remove:
+                            pkgs_to_not_remove.remove(pkg2)
 
         # clean up duplicates (multiple versions)
         _pkgs_to_install = []
@@ -143,7 +173,6 @@ Replace a package with another that provides the same thing"""
             if latest_pkg not in _pkgs_to_install:
                 _pkgs_to_install.append(latest_pkg)
         pkgs_to_install = _pkgs_to_install
-
 
         # Its common that newer/replacement packages won't provide all the same things.
         # Give the user the chance to bail if they are scared.
@@ -155,9 +184,7 @@ Replace a package with another that provides the same thing"""
                 res = raw_input("This may be normal depending on the package.  Continue? [y/N] ")
                 if not res.strip('\n').lower() in ['y', 'yes']:
                     sys.exit(1)
-            
         
-
         # remove old packages
         for pkg in pkgs_to_remove:
             base.remove(pkg)

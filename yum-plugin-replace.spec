@@ -1,6 +1,6 @@
 
 Name: yum-plugin-replace        
-Version:    0.1
+Version:    0.2
 Release:    1%{?dist}
 Summary:    Package Replacement Plugin for Yum
 
@@ -51,6 +51,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri Jul 30 2010 BJ Dierkes <wdierkes@rackspace.com> - 0.2-1
+- Latest sources
+
 * Tue Jul 13 2010 BJ Dierkes <wdierkes@rackspace.com> - 0.1-1
 - Initial spec build.
 
