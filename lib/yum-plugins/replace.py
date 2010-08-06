@@ -21,15 +21,15 @@ import sys
 import logging
 import platform
 
-from yum.plugins import TYPE_COREi, TYPE_INTERACTIVE
+from yum.plugins import TYPE_CORE, TYPE_INTERACTIVE
 from yum.Errors import UpdateError, RemoveError
 from yum.constants import PLUG_OPT_STRING, PLUG_OPT_WHERE_ALL
 
 requires_api_version = '2.6'
 plugin_type = (TYPE_CORE, TYPE_INTERACTIVE)
 
-global pkgs_to_not_remove
-pkgs_to_not_remove = []
+global pkgs_to_not_remove, pkgs_to_remove
+pkgs_to_remove = []
 
 def config_hook(conduit):
     "Add options to Yums configuration."
@@ -37,9 +37,9 @@ def config_hook(conduit):
     
     # FIX ME: better way around this?
     # see https://answers.launchpad.net/ius/+question/120106
-    if parser:
-        parser.add_option('--replace-with', dest='replace_with', action='store',
-            metavar='BASEPKG', help="name of the base package to replace with")
+    #if parser:
+    parser.add_option('--replace-with', dest='replace_with', action='store',
+        metavar='BASEPKG', help="name of the base package to replace with")
 
     reg = conduit.registerCommand
     conduit.registerCommand(ReplaceCommand(['replace']))
@@ -50,10 +50,10 @@ def postresolve_hook(conduit):
     the 'mysql' packages gets removed before the mysql5x package gets 
     installed.
     """
-    global pkgs_to_not_remove
+    global pkgs_to_remove
     TsInfo = conduit.getTsInfo()
     for i in TsInfo:
-        if i.po in pkgs_to_not_remove:
+        if i.ts_state == 'e' and i.po not in pkgs_to_remove:
             TsInfo.remove(i.pkgtup) 
 
 class ReplaceCommand(object):
@@ -76,9 +76,9 @@ Replace a package with another that provides the same thing"""
     def doCommand(self, base, basecmd, extcmds):
         logger = logging.getLogger("yum.verbose.main")
         print "Replacing packages takes time, please be patient..."
-        global pkgs_to_not_remove
-        pkgs_to_remove = []
+        global pkgs_to_remove
         pkgs_to_install = []
+        pkgs_to_not_remove = []
         deps_to_resolve = []
         pkgs_with_same_srpm = []
 
@@ -117,17 +117,30 @@ Replace a package with another that provides the same thing"""
                     deps_to_resolve.append(dep)
 
         # get new pkg object
-        res = base.pkgSack.returnNewestByName(new_pkg)
         new_pkgs = []
+        res = base.pkgSack.returnNewestByName(new_pkg)
         for i in res:
             if platform.machine() == i.arch:
-                new_pkgs.append(i)
+                if i not in new_pkgs:
+                    new_pkgs.append(i)
 
         # if no archs matched (maybe a i686 / i386 issue) then pass them all
         if len(new_pkgs) == 0:
             new_pkgs = res
 
-        if len(new_pkgs) > 1:
+        # clean up duplicates, for some reason yum creates duplicate package objects
+        # that are the same, but different object ref so they don't compare.  here
+        # we compare against returnEVR().
+        final_pkgs = []
+        for i in new_pkgs:
+            add = True 
+            for i2 in final_pkgs:
+                if i.returnEVR() == i2.returnEVR() and i.arch == i2.arch:
+                    add = False
+            if add and i not in final_pkgs:
+                final_pkgs.append(i)
+
+        if len(final_pkgs) > 1:
             raise UpdateError, \
                 "Multiple packages found matching '%s'.  Please upgrade manually." % \
                 new_pkg
