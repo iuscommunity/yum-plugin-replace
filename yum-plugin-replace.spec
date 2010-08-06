@@ -1,6 +1,6 @@
 
 Name: yum-plugin-replace        
-Version:    0.2
+Version:    0.2.2
 Release:    1%{?dist}
 Summary:    Package Replacement Plugin for Yum
 
@@ -8,7 +8,7 @@ Group:      System Environment/Base
 License:    GPL
 URL:        http://github.com/derks/yum-plugin-replace
 Source0:    http://dl.iuscommunity.org/pub/%{name}/%{name}-%{version}.tar.gz
-BuildRoot:  %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
+BuildRoot:  %(miktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 Requires:   yum  
 
@@ -51,6 +51,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri Aug 06 2010 BJ Dierkes <wdierkes@rackspace.com> - 0.2.2-1
+- Latest sources
+
 * Fri Jul 30 2010 BJ Dierkes <wdierkes@rackspace.com> - 0.2-1
 - Latest sources
 

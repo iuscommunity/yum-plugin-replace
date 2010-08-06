@@ -21,12 +21,12 @@ import sys
 import logging
 import platform
 
-from yum.plugins import TYPE_CORE
+from yum.plugins import TYPE_COREi, TYPE_INTERACTIVE
 from yum.Errors import UpdateError, RemoveError
 from yum.constants import PLUG_OPT_STRING, PLUG_OPT_WHERE_ALL
 
 requires_api_version = '2.6'
-plugin_type = (TYPE_CORE,)
+plugin_type = (TYPE_CORE, TYPE_INTERACTIVE)
 
 global pkgs_to_not_remove
 pkgs_to_not_remove = []
@@ -34,11 +34,15 @@ pkgs_to_not_remove = []
 def config_hook(conduit):
     "Add options to Yums configuration."
     parser = conduit.getOptParser()
-    parser.add_option('--replace-with', dest='replace_with', action='store',
-        metavar='BASEPKG', help="name of the base package to replace with")
+    
+    # FIX ME: better way around this?
+    # see https://answers.launchpad.net/ius/+question/120106
+    if parser:
+        parser.add_option('--replace-with', dest='replace_with', action='store',
+            metavar='BASEPKG', help="name of the base package to replace with")
 
     reg = conduit.registerCommand
-    reg(ReplaceCommand(['replace']))
+    conduit.registerCommand(ReplaceCommand(['replace']))
 
 def postresolve_hook(conduit):
     """
