@@ -35,9 +35,6 @@ def config_hook(conduit):
     "Add options to Yums configuration."
     parser = conduit.getOptParser()
     
-    # FIX ME: better way around this?
-    # see https://answers.launchpad.net/ius/+question/120106
-    #if parser:
     parser.add_option('--replace-with', dest='replace_with', action='store',
         metavar='BASEPKG', help="name of the base package to replace with")
 
@@ -50,6 +47,15 @@ def postresolve_hook(conduit):
     the 'mysql' packages gets removed before the mysql5x package gets 
     installed.
     """
+    
+    try:
+        # only perform our operations (hacks) if replace command was called.
+        if conduit.getCmdLine()[1][0] != 'replace':
+            return
+    except IndexError, e:
+        # yum not called from command line?
+        return
+
     global pkgs_to_remove
     TsInfo = conduit.getTsInfo()
     for i in TsInfo:
