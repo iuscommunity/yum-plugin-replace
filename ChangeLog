@@ -1,4 +1,8 @@
 
+Sep 24, 2012 - 0.2.5
+------------------------------------------------------------------------------
+ -  Attempt to auto resolve when multiple provides are found
+
 Aug 10, 2010 - 0.2.4
 ------------------------------------------------------------------------------
  -  Only run 'postresolve_hook' if 'replace' was passed at command line
