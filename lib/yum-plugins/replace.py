@@ -161,14 +161,48 @@ Replace a package with another that provides the same thing"""
                         pkgs_to_not_remove.append(pkg)
 
         # determine all new_pkg subpackages that provide missing deps
+        providers = {}
         for pkg in base.pkgSack:
             if pkg.sourcerpm == new_pkgobject.sourcerpm:
                 pkgs_with_same_srpm.append(pkg)
                 for dep in pkg.provides_names:
                     if dep in deps_to_resolve:
                         if pkg not in pkgs_to_remove:
-                            pkgs_to_install.append(pkg)
-                        deps_to_resolve.remove(dep)
+                            
+                            # build a list of all packages matching provides
+                            if not providers.has_key(dep):
+                                providers[dep] = []
+                            providers[dep].append(pkg)
+                            
+        # We now have a complete list of package providers we care about
+        if providers:
+            resolved = False
+            for key, pkgs in providers.items():
+                if len(pkgs) == 1:
+                    pkgs_to_install.append(pkgs[0])
+                    deps_to_resolve.remove(key)
+                    resolved = True
+
+                elif len(pkgs) > 1:
+                    # Attempt to auto resolve multiple provides
+                    for rpkg in pkgs_to_remove:
+                        npkg = rpkg.name.replace(orig_pkg, new_pkg)
+                        for pkg in pkgs:
+                            if npkg == pkg.name:
+                                pkgs_to_install.append(pkg)
+                                resolved = True
+
+                    # we've completed our auto resolve,
+                    # if resolved lets remove the key
+                    if resolved:
+                        deps_to_resolve.remove(key)
+
+                    if not resolved:
+                        print '\nWARNING: Multiple Providers found for %s' % key
+                        print "  %s" % [str(i) for i in pkgs]
+
+                # remove the dep from dict since it should be handled.
+                del(providers[key])
 
         # This is messy: determine if any of the pkgs_to_not_remove have
         # counterparts as part of same 'base name' set (but different srpm, i.e. 
