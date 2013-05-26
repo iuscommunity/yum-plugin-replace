@@ -204,14 +204,28 @@ Replace a package with another that provides the same thing"""
                 # remove the dep from dict since it should be handled.
                 del(providers[key])
 
+        orig_prefix = orig_pkg
+        new_prefix = new_pkg
+
+        # Find the original and new prefixes of packages based on their sourcerpm name
+        m = re.match('(.*)-%s-%s' % (orig_pkgobject.version, orig_pkgobject.release),\
+            orig_pkgobject.sourcerpm)
+        if m:
+            orig_prefix = m.group(1)
+
+        m = re.match('(.*)-%s-%s' % (new_pkgobject.version, new_pkgobject.release),\
+            new_pkgobject.sourcerpm)
+        if m:
+            new_prefix = m.group(1)
+
         # This is messy: determine if any of the pkgs_to_not_remove have
         # counterparts as part of same 'base name' set (but different srpm, i.e. 
         # php and php-pear has different source rpms but you want phpXY-pear too).
         for pkg in pkgs_to_not_remove:
-            m = re.match('%s-(.*)' % orig_pkg, pkg.name)
+            m = re.match('%s-(.*)' % orig_prefix, pkg.name)
             if not m:
                 continue
-            replace_name = "%s-%s" % (new_pkg, m.group(1))
+            replace_name = "%s-%s" % (new_prefix, m.group(1))
             for pkg2 in base.pkgSack: 
                 if pkg2.name == replace_name:
                     if pkg not in pkgs_to_remove:
