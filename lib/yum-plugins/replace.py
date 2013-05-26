@@ -207,7 +207,8 @@ Replace a package with another that provides the same thing"""
         # This is messy: determine if any of the pkgs_to_not_remove have
         # counterparts as part of same 'base name' set (but different srpm, i.e. 
         # php and php-pear has different source rpms but you want phpXY-pear too).
-        for pkg in pkgs_to_not_remove:
+        while pkgs_to_not_remove:
+            pkg = pkgs_to_not_remove.pop()
             m = re.match('%s-(.*)' % orig_pkg, pkg.name)
             if not m:
                 continue
