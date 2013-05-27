@@ -153,6 +153,20 @@ Replace a package with another that provides the same thing"""
         new_pkgobject = new_pkgs[0]
         pkgs_to_install.append(new_pkgobject)
 
+        orig_prefix = orig_pkg
+        new_prefix = new_pkg
+
+        # Find the original and new prefixes of packages based on their sourcerpm name
+        m = re.match('(.*)-%s-%s' % (orig_pkgobject.version, orig_pkgobject.release),\
+            orig_pkgobject.sourcerpm)
+        if m:
+            orig_prefix = m.group(1)
+
+        m = re.match('(.*)-%s-%s' % (new_pkgobject.version, new_pkgobject.release),\
+            new_pkgobject.sourcerpm)
+        if m:
+            new_prefix = m.group(1)
+
         # don't remove pkgs that rely on orig_pkg (yum tries to remove them)
         for pkg in base.rpmdb:
             for req in pkg.requires_names:
@@ -173,7 +187,7 @@ Replace a package with another that provides the same thing"""
                             if not providers.has_key(dep):
                                 providers[dep] = []
                             providers[dep].append(pkg)
-                            
+
         # We now have a complete list of package providers we care about
         if providers:
             resolved = False
@@ -186,7 +200,7 @@ Replace a package with another that provides the same thing"""
                 elif len(pkgs) > 1:
                     # Attempt to auto resolve multiple provides
                     for rpkg in pkgs_to_remove:
-                        npkg = rpkg.name.replace(orig_pkg, new_pkg)
+                        npkg = rpkg.name.replace(orig_prefix, new_prefix)
                         for pkg in pkgs:
                             if npkg == pkg.name:
                                 pkgs_to_install.append(pkg)
@@ -203,20 +217,6 @@ Replace a package with another that provides the same thing"""
 
                 # remove the dep from dict since it should be handled.
                 del(providers[key])
-
-        orig_prefix = orig_pkg
-        new_prefix = new_pkg
-
-        # Find the original and new prefixes of packages based on their sourcerpm name
-        m = re.match('(.*)-%s-%s' % (orig_pkgobject.version, orig_pkgobject.release),\
-            orig_pkgobject.sourcerpm)
-        if m:
-            orig_prefix = m.group(1)
-
-        m = re.match('(.*)-%s-%s' % (new_pkgobject.version, new_pkgobject.release),\
-            new_pkgobject.sourcerpm)
-        if m:
-            new_prefix = m.group(1)
 
         # This is messy: determine if any of the pkgs_to_not_remove have
         # counterparts as part of same 'base name' set (but different srpm, i.e. 
