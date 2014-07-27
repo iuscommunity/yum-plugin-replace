@@ -24,7 +24,7 @@ import platform
 from yum.plugins import TYPE_CORE, TYPE_INTERACTIVE
 from yum.Errors import UpdateError, RemoveError
 from yum.constants import PLUG_OPT_STRING, PLUG_OPT_WHERE_ALL
-from yumcommands import checkRootUID, checkGPGKey, checkEnabledRepo
+from yumcommands import checkRootUID, checkGPGKey
 
 requires_api_version = '2.6'
 plugin_type = (TYPE_CORE, TYPE_INTERACTIVE)
@@ -80,7 +80,6 @@ Replace a package with another that provides the same thing"""
     def doCheck(self, base, basecmd, extcmds):
         checkRootUID(base)
         checkGPGKey(base)
-        checkEnabledRepo(base, extcmds)
 
     def doCommand(self, base, basecmd, extcmds):
         logger = logging.getLogger("yum.verbose.main")
