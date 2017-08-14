@@ -1,0 +1,25 @@
+# Package Replacement Plugin for Yum
+
+This plugin enables the ability to replace an installed package, with another package that provides the same thing.  It was developed specifically for the [IUS Community Project](https://ius.io) whose packages have alternative names as to not automatically upgrade stock packages.  They also do not Obsolete the packages they provide, therefore making upgrading a little bit more tedious.  For example upgrading `mysql` to `mysql50` or `mysql51` requires first uninstalling `mysql` and then installing the alternate package name.  An alternative is using the yum shell allowing you do uninstall, and install packages in one operation.
+
+This plugin allows the end user to replace a package with another in the following fashion:
+
+```
+$ yum replace mysql --replace-with mysql51
+```
+
+
+The plugin first determines what `mysql` (or the original package) provides and then verifies that the alternative package (`mysql51`) also provides the same.  It continues to determine what other sub-packages of `mysql` are installed and then determines the replacement package from the `mysql51` set, also ensuring that the new package has the same 'provides'.
+
+If a package does not meet the 'providers' requirements the process will halt and ask for user approval to continue.  Then end user can optionally pass `-y` to assume yes to this inquiry.  It should be noted that it is quite common that a newer 'replacement' package would not fully provide everything that the original package did.
+
+
+## Source Code and Bug Tracking
+
+The source code for yum-plugin-replace is currently hosted on [GitHub](https://github.com/iuscommunity/yum-plugin-replace).  All bugs/feature requests can be reported there.
+
+
+## License
+
+This plugin is Open Source and released under the [GNU GPLv2](https://opensource.org/licenses/gpl-2.0.php).  Please see the LICENSE file that came with this source.
+
